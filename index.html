@@ -400,14 +400,17 @@ html[data-theme="dark"] .contact-row:hover,html[data-theme="theme4"] .contact-ro
 
 /* MOBILE */
 @media(max-width:980px){
-  .right-panel{display: none;}
+  .right-panel{display:none;width:100%;}
   .app{grid-template-columns:1fr;height:100vh;}
   .app.chat-open{padding-bottom:0;}
   .app[data-view="chat"] .messages-scroll{padding-bottom:0;}
   .app.chat-open .messages-scroll{padding-bottom:0 !important;}
-  .sidebar,.chat-panel,.settings-panel,.call-history-panel{display:none;width:100%;}
+  .sidebar,.chat-panel{display:none;width:100%;}
+  .settings-panel,.call-history-panel{display:none;width:100%;}
   .app[data-view="list"] .sidebar{display:flex;}
   .app[data-view="chat"] .chat-panel{display:flex;}
+  .app[data-view="settings"] .right-panel{display:flex;}
+  .app[data-view="calls"] .right-panel{display:flex;}
   .app[data-view="settings"] .settings-panel{display:flex;}
   .app[data-view="calls"] .call-history-panel{display:flex;}
   .mobile-only{display:flex !important;}
