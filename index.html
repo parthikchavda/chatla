@@ -430,6 +430,9 @@ html[data-theme="dark"] .contact-row:hover,html[data-theme="theme4"] .contact-ro
   .mnav-pill{display:flex;align-items:center;gap:6px;background:var(--active-row);color:var(--accent);padding:9px 18px;border-radius:var(--radius-pill);font-weight:700;font-size:13px;}
   .fab{bottom:calc(64px + env(safe-area-inset-bottom) + 16px);}
   .msg-row{max-width:78%;}
+  .composer{padding:10px 12px;gap:6px;}
+  .composer .icon-btn{width:36px;height:36px;flex-shrink:0;}
+  .message-input{padding:11px 14px;min-width:0;}
   .settings-panel{padding-bottom:80px;}
   .call-history-panel{padding-bottom:80px;}
   .call-history-header{padding:16px 16px 10px;}
@@ -563,7 +566,7 @@ try{var t=localStorage.getItem('chatla-theme');if(t)document.documentElement.set
         <button type="button" class="icon-btn ghost" id="attachBtn" aria-label="Attach file"><svg viewBox="0 0 24 24" class="icon"><path d="M16.5 6.5l-8 8a3 3 0 1 0 4.24 4.24l8-8a5 5 0 1 0-7.07-7.07l-8.49 8.49"/></svg></button>
         <input type="file" id="fileInput" hidden multiple>
         <input type="text" id="messageInput" class="message-input" placeholder="Your Message…" autocomplete="off">
-        <button type="submit" class="icon-btn send-btn" aria-label="Send"><svg viewBox="0 0 24 24" class="icon"><path d="M3 11l18-8-8 18-2.5-7.5L3 11z"/></svg></button>
+        <button type="submit" class="icon-btn send-btn hidden" id="sendBtn" aria-label="Send"><svg viewBox="0 0 24 24" class="icon"><path d="M3 11l18-8-8 18-2.5-7.5L3 11z"/></svg></button>
         <button type="button" class="icon-btn ghost mic-btn" id="micBtn" aria-label="Record voice message"><svg viewBox="0 0 24 24" class="icon"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
       </form>
     </div>
@@ -1426,6 +1429,12 @@ function checkPeerExists(token){
   });
 }
 
+function updateComposerButtons(){
+  const hasText=$('messageInput').value.trim().length>0;
+  $('sendBtn').classList.toggle('hidden',!hasText);
+  $('micBtn').classList.toggle('hidden',hasText);
+}
+
 /* ============================================================ CHAT */
 async function openChat(token){
   activeToken=token;
@@ -1450,6 +1459,8 @@ async function openChat(token){
   $('composerForm').classList.toggle('hidden',isPending);
   $('pendingRequestBanner').classList.toggle('hidden',!isPending);
   if(isPending)$('pendingRequestName').textContent=contact.name;
+  $('messageInput').value='';
+  updateComposerButtons();
   await renderMessages(token);
   scrollToBottom();
   document.getElementById('app').dataset.view='chat';
@@ -2346,9 +2357,9 @@ function wireEvents(){
   $('chatBackBtn').addEventListener('click',()=>{setMobileNav('list');activeToken=null;renderContactList($('searchInput').value);});
 
   // Compose
-  $('composerForm').addEventListener('submit',async e=>{e.preventDefault();const input=$('messageInput');await sendMessage(input.value.trim());input.value='';sendTyping(false);});
+  $('composerForm').addEventListener('submit',async e=>{e.preventDefault();const input=$('messageInput');await sendMessage(input.value.trim());input.value='';sendTyping(false);updateComposerButtons();});
   let typingDebounce;
-  $('messageInput').addEventListener('input',()=>{sendTyping(true);clearTimeout(typingDebounce);typingDebounce=setTimeout(()=>sendTyping(false),2000);});
+  $('messageInput').addEventListener('input',()=>{sendTyping(true);clearTimeout(typingDebounce);typingDebounce=setTimeout(()=>sendTyping(false),2000);updateComposerButtons();});
 
   // Emoji
   $('emojiBtn').addEventListener('click',e=>{e.stopPropagation();const picker=$('emojiPicker');const rect=$('emojiBtn').getBoundingClientRect();picker.style.bottom=(window.innerHeight-rect.top+8)+'px';picker.style.left=rect.left+'px';picker.classList.toggle('hidden');});
