@@ -183,6 +183,9 @@ html[data-theme="dark"] .contact-row:hover,html[data-theme="theme4"] .contact-ro
 .reply-to-label{color:var(--accent);font-weight:700;}
 #replyPreviewText{color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .composer{display:flex;align-items:center;gap:8px;padding:14px 20px;background:var(--panel-bg);border-top:1px solid var(--border);flex-shrink:0;}
+.pending-request-banner{display:flex;align-items:center;gap:10px;padding:14px 20px;background:var(--card-bg);border-top:1px solid var(--border);flex-shrink:0;color:var(--text-2);font-size:13.5px;}
+.pending-request-banner .icon{width:18px;height:18px;flex-shrink:0;color:var(--accent);}
+.pending-request-banner strong{color:var(--text-1);}
 .message-input{flex:1;border:none;background:var(--input-bg);border-radius:var(--radius-pill);padding:13px 18px;font-size:14.5px;color:var(--text-1);outline:none;}
 .message-input::placeholder{color:var(--text-2);}
 .send-btn{background:var(--accent-grad);color:#fff;}
@@ -331,6 +334,7 @@ html[data-theme="dark"] .contact-row:hover,html[data-theme="theme4"] .contact-ro
 .scan-frame-corners{position:absolute;inset:16%;border:2px solid rgba(255,255,255,.6);border-radius:12px;pointer-events:none;}
 .flash-toggle{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.5);color:#fff;border:none;border-radius:var(--radius-pill);padding:8px 14px;font-size:11.5px;display:flex;gap:6px;align-items:center;}
 .flash-toggle .icon{width:14px;height:14px;}
+.flash-toggle.on{background:#F5A623;color:#1a1200;}
 .scan-side{display:flex;flex-direction:column;gap:10px;}
 .info-box{display:flex;align-items:flex-start;gap:10px;background:var(--card-bg);border-radius:14px;padding:12px;font-size:12.5px;color:var(--text-2);}
 .info-box .icon{color:var(--accent);flex-shrink:0;width:18px;height:18px;margin-top:1px;}
@@ -424,7 +428,7 @@ html[data-theme="dark"] .contact-row:hover,html[data-theme="theme4"] .contact-ro
   .mnav-btn .icon{width:22px;height:22px;}
   .mnav-btn.active{color:var(--accent);}
   .mnav-pill{display:flex;align-items:center;gap:6px;background:var(--active-row);color:var(--accent);padding:9px 18px;border-radius:var(--radius-pill);font-weight:700;font-size:13px;}
-  .fab{bottom:16px;}
+  .fab{bottom:calc(64px + env(safe-area-inset-bottom) + 16px);}
   .msg-row{max-width:78%;}
   .settings-panel{padding-bottom:80px;}
   .call-history-panel{padding-bottom:80px;}
@@ -550,6 +554,10 @@ try{var t=localStorage.getItem('chatla-theme');if(t)document.documentElement.set
         <button class="icon-btn ghost sm" id="cancelReplyBtn"><svg viewBox="0 0 24 24" class="icon"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
       </div>
 
+      <div class="pending-request-banner hidden" id="pendingRequestBanner">
+        <svg viewBox="0 0 24 24" class="icon"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+        <span>Waiting for <strong id="pendingRequestName"></strong> to accept your request…</span>
+      </div>
       <form class="composer" id="composerForm">
         <button type="button" class="icon-btn ghost" id="emojiBtn" aria-label="Emoji"><svg viewBox="0 0 24 24" class="icon"><circle cx="12" cy="12" r="9"/><path d="M9 10h.01M15 10h.01M8.5 15a4 4 0 0 0 7 0"/></svg></button>
         <button type="button" class="icon-btn ghost" id="attachBtn" aria-label="Attach file"><svg viewBox="0 0 24 24" class="icon"><path d="M16.5 6.5l-8 8a3 3 0 1 0 4.24 4.24l8-8a5 5 0 1 0-7.07-7.07l-8.49 8.49"/></svg></button>
@@ -695,6 +703,12 @@ try{var t=localStorage.getItem('chatla-theme');if(t)document.documentElement.set
           <svg viewBox="0 0 24 24" class="icon" style="width:22px;height:22px"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
         </button>
         <span class="call-btn-label">Speaker</span>
+      </div>
+      <div class="call-btn-group hidden" id="callScreenShareGroup">
+        <button class="call-btn" id="callScreenShareBtn">
+          <span class="call-btn-icon" id="callScreenShareIcon"><svg viewBox="0 0 24 24" class="icon" style="width:22px;height:22px"><rect x="2" y="4" width="20" height="14" rx="2"/><path d="M8 21h8M12 18v3"/></svg></span>
+        </button>
+        <span class="call-btn-label" id="callScreenShareLabel">Share</span>
       </div>
     </div>
   </div>
@@ -994,6 +1008,8 @@ let callType=null; // 'audio' | 'video'
 let isCallMuted=false;
 let isVideoOff=false;
 let localStream=null;
+let screenStream=null;
+let isScreenSharing=false;
 let callStartTime=null;
 let callTimerInterval=null;
 let callHistory=lsGetJSON(LS.CALLS,[]);
@@ -1077,7 +1093,8 @@ function handleIncomingConn(conn){
 
 function setupConn(conn,token){
   connections[token]=conn;
-  conn.on('open',()=>{updateContactStatus(token,true);sendControl(conn,'handshake',{name:myName,color:myColor});});
+  const onOpen=()=>{updateContactStatus(token,true);sendControl(conn,'handshake',{name:myName,color:myColor});};
+  if(conn.open)onOpen();else conn.on('open',onOpen);
   conn.on('data',data=>handleData(data,token));
   conn.on('close',()=>{delete connections[token];updateContactStatus(token,false);});
   conn.on('error',err=>{console.warn('Conn error:',token,err);delete connections[token];updateContactStatus(token,false);});
@@ -1136,8 +1153,9 @@ function updateContactStatus(token,online){
   if(activeToken===token){
     $('chatHeaderDot').className='status-dot'+(online?' online':'');
     $('chatHeaderStatus').textContent=online?'Online':'Offline';
-    $('callBtn').disabled=!online;
-    $('videoBtn').disabled=!online;
+    const isPending=contact.status==='pending_sent';
+    $('callBtn').disabled=!online||isPending;
+    $('videoBtn').disabled=!online||isPending;
   }
   const row=document.querySelector(`.contact-row[data-token="${token}"]`);
   if(row){const d=row.querySelector('.online-dot');if(d)d.style.display=online?'block':'none';}
@@ -1158,13 +1176,31 @@ async function handleData(data,token){
       case 'delete_me':handleRemoteDeleteMe(token);break;
       case 'ping':sendControl(connections[token],'pong',{});break;
       case 'pong':if(connections[token])connections[token]._lastPong=Date.now();break;
+      case 'accept_request':await handleAcceptRequest(token,data);break;
+      case 'request_declined':handleRequestDeclined(token);break;
     }
     return;
   }
-  const contact=contacts.find(c=>c.token===token);
+  let contact=contacts.find(c=>c.token===token);
   if(!contact){
-    if(pendingConns[token])await promptAddContact(token,data._senderName||'Unknown');
+    if(pendingConns[token]){
+      const q=pendingIncomingMsgs[token]||(pendingIncomingMsgs[token]=[]);
+      q.push(data);
+      if(q.length>30)q.shift();
+      await promptAddContact(token,data._senderName||'Unknown');
+    }
     return;
+  }
+  // Safety net: if they're messaging us while our own request to them is still "pending",
+  // they've clearly accepted — unlock the chat instead of silently losing the message.
+  if(contact.status==='pending_sent'){
+    contact.status='accepted';
+    await dbPut('contacts',contact);
+    if(activeToken===token){
+      $('composerForm').classList.remove('hidden');
+      $('pendingRequestBanner').classList.add('hidden');
+      $('callBtn').disabled=!contact.online;$('videoBtn').disabled=!contact.online;
+    }
   }
   const msg={
     id:data.id||uid(),thread:threadId(myToken,token),from:token,
@@ -1180,6 +1216,40 @@ async function handleData(data,token){
   if(activeToken===token){appendMessage(msg,contact);scrollToBottom();sendControl(connections[token],'read',{ids:[msg.id]});}
   else{unreadCounts[token]=(unreadCounts[token]||0)+1;showInAppNotif(contact,msg);}
   renderContactList();
+}
+
+async function handleAcceptRequest(token,data){
+  const contact=contacts.find(c=>c.token===token);
+  if(!contact||contact.status!=='pending_sent')return;
+  contact.status='accepted';
+  contact.online=true;
+  if(data.name&&data.name!==contact.name)contact.name=sanitize(data.name);
+  if(data.color)contact.color=data.color;
+  await dbPut('contacts',contact);
+  contacts=await dbGetAll('contacts');
+  renderContactList();
+  showToast(`${contact.name} accepted your request!`,'success');
+  if(activeToken===token){
+    $('chatHeaderName').textContent=contact.name;
+    $('composerForm').classList.remove('hidden');
+    $('pendingRequestBanner').classList.add('hidden');
+    $('chatHeaderDot').className='status-dot online';
+    $('chatHeaderStatus').textContent='Online';
+    $('callBtn').disabled=false;$('videoBtn').disabled=false;
+  }
+}
+
+function handleRequestDeclined(token){
+  const contact=contacts.find(c=>c.token===token);
+  const name=contact?.name||token;
+  if(contact&&contact.status==='pending_sent'){
+    contacts=contacts.filter(c=>c.token!==token);
+    dbDelete('contacts',token);
+    if(activeToken===token){activeToken=null;$('chatEmptyState').classList.remove('hidden');$('chatActive').classList.add('hidden');setMobileNav('list');}
+    renderContactList();
+  }
+  delete connections[token];
+  showToast(`${name} declined your request`,'info');
 }
 
 async function handleHandshake(token,data){
@@ -1232,7 +1302,7 @@ function renderContactList(filter=''){
           <span class="contact-name">${escHtml(c.name)}</span>
           ${pinned?`<svg viewBox="0 0 24 24" class="pin-mark icon"><path d="M12 2l1.5 5.5L19 9l-5.5 3L12 18l-1.5-6L5 9l5.5-1.5z" fill="currentColor" stroke="none"/></svg>`:''}
         </div>
-        <span class="contact-last">${escHtml(c.lastMsg||'Say hello!')}</span>
+        <span class="contact-last">${c.status==='pending_sent'?'⏳ Request pending…':escHtml(c.lastMsg||'Say hello!')}</span>
       </div>
       <div class="contact-meta">
         ${c.lastTs?`<span class="contact-time">${formatTime(c.lastTs)}</span>`:''}
@@ -1245,18 +1315,21 @@ function renderContactList(filter=''){
   }
 }
 
-async function addContact(token,name,color){
+async function addContact(token,name,color,opts={}){
   token=String(token||'').trim();
   if(!validateToken(token)){showToast('Invalid token format','warn');return;}
   if(token===myToken){showToast("That's your own token!",'warn');return;}
   if(contacts.find(c=>c.token===token)){showToast('Contact already added','info');openChat(token);return;}
-  const contact={token,name:sanitize(name||'Friend'),color:color||avatarColor(token),lastMsg:'',lastTs:0,online:false};
+  const status=opts.status||'accepted';
+  const contact={token,name:sanitize(name||'Friend'),color:color||avatarColor(token),lastMsg:'',lastTs:0,online:false,status};
   contacts.push(contact);
   await dbPut('contacts',contact);
   renderContactList();
   openChat(token);
+  setMobileNav('chat');
   connectTo(token);
-  showToast(`${contact.name} added!`,'success');
+  if(status==='pending_sent')showToast(`Request sent to ${contact.name}`,'success');
+  else showToast(`${contact.name} added!`,'success');
 }
 
 async function promptAddContact(token,name,fromURL=false){
@@ -1282,18 +1355,57 @@ async function promptAddContact(token,name,fromURL=false){
   av.textContent=initials(safeName);
   av.style.background=avatarColor(token);
   el.classList.remove('hidden');
+  if(!fromURL){
+    // Someone is asking to add ME — surface it the same way a message notification would.
+    const prefs=lsGetJSON(LS.NOTIF,{});
+    if(prefs.all!==false){
+      playNotifSound();
+      if(prefs.desktop!==false&&document.visibilityState==='hidden'&&Notification.permission==='granted'){
+        new Notification('New contact request',{body:`${safeName} wants to chat with you on Chatla`});
+      } else if(Notification.permission==='default'){
+        Notification.requestPermission();
+      }
+    }
+  }
   $('confirmAddContactBtn').onclick=async()=>{
     el.classList.add('hidden');
     markInviteHandled(token);
-    await addContact(token,name,null);
+    if(!$('inviteModal').classList.contains('hidden'))closeModal('inviteModal');
+    if(fromURL){
+      // I'm the one initiating: this becomes a pending outgoing request until they accept.
+      await addContact(token,name,null,{status:'pending_sent'});
+      const conn=connections[token]||pendingConns[token];
+      if(conn?.open)updateContactStatus(token,true);
+    } else {
+      // Someone connected to me and I'm accepting their incoming request right now.
+      const conn=connections[token]||pendingConns[token];
+      await addContact(token,name,null,{status:'accepted'});
+      // The connection was already open before this contact record existed, so the
+      // earlier 'open' status update had nothing to write to — set it now that we can.
+      if(conn?.open)updateContactStatus(token,true);
+      sendControl(conn,'accept_request',{name:myName,color:myColor});
+      const queued=pendingIncomingMsgs[token];
+      if(queued&&queued.length){
+        for(const msg of queued)await handleData(msg,token);
+        delete pendingIncomingMsgs[token];
+      }
+    }
     delete pendingConns[token];
   };
   $('declineAddContactBtn').onclick=()=>{
     el.classList.add('hidden');
     markInviteHandled(token);
+    const conn=pendingConns[token];
+    if(conn){sendControl(conn,'request_declined',{});try{conn.close();}catch{}}
     delete pendingConns[token];
+    delete pendingIncomingMsgs[token];
+    delete connections[token];
   };
 }
+
+// Messages that arrive from an unknown sender before we've accepted their request —
+// held here so nothing is lost, then replayed into the thread once accepted.
+let pendingIncomingMsgs={};
 
 // Quick existence probe: open a connection tagged _probe and wait for the other side's
 // probe_ack control message. Resolves true/false; never registers in connections{} or
@@ -1307,10 +1419,10 @@ function checkPeerExists(token){
     probe.on('open',()=>{
       probe.on('data',data=>{if(data?._ctrl==='probe_ack')finish(true);});
       // Fallback: if no probe_ack arrives (older client), treat a clean open as alive.
-      setTimeout(()=>finish(true),2500);
+      setTimeout(()=>finish(true),1200);
     });
     probe.on('error',()=>finish(false));
-    setTimeout(()=>finish(false),6000);
+    setTimeout(()=>finish(false),3000);
   });
 }
 
@@ -1332,8 +1444,12 @@ async function openChat(token){
   else badge.classList.add('hidden');
   $('chatHeaderDot').className='status-dot'+(contact.online?' online':'');
   $('chatHeaderStatus').textContent=contact.online?'Online':'Offline';
-  $('callBtn').disabled=!contact.online;
-  $('videoBtn').disabled=!contact.online;
+  const isPending=contact.status==='pending_sent';
+  $('callBtn').disabled=!contact.online||isPending;
+  $('videoBtn').disabled=!contact.online||isPending;
+  $('composerForm').classList.toggle('hidden',isPending);
+  $('pendingRequestBanner').classList.toggle('hidden',!isPending);
+  if(isPending)$('pendingRequestName').textContent=contact.name;
   await renderMessages(token);
   scrollToBottom();
   document.getElementById('app').dataset.view='chat';
@@ -1459,6 +1575,8 @@ function scrollToBottom(){const s=$('messagesScroll');s.scrollTop=s.scrollHeight
 
 async function sendMessage(text,type='text',media=null,fileName=null){
   if(!activeToken)return;
+  const activeContact=contacts.find(c=>c.token===activeToken);
+  if(activeContact?.status==='pending_sent'){showToast('Waiting for them to accept your request','info');return;}
   // Input validation
   if(type==='text'){
     text=text.trim();
@@ -1819,10 +1937,12 @@ function showCallScreen(contact,type,status){
   $('callHeaderAvatar').style.background=contact.color||avatarColor(contact.token||'');
   $('callContactName').textContent=contact.name;
   $('callStatus').textContent=status;
-  isCallMuted=false;isVideoOff=false;
+  isCallMuted=false;isVideoOff=false;isScreenSharing=false;
   $('callMuteBtn').classList.remove('muted');
   $('callCamBtn').classList.remove('cam-off');
-  setMicIcon(false);setCamIcon(false);
+  $('callScreenShareBtn').classList.remove('cam-off');
+  setMicIcon(false);setCamIcon(false);setScreenShareIcon(false);
+  $('callScreenShareGroup').classList.toggle('hidden',type!=='video');
 }
 
 function setupCallHandlers(call,contact,isIncoming){
@@ -1885,7 +2005,9 @@ function endCallCleanup(reason){
     try{activeCall.close();}catch{}
     activeCall=null;
   }
+  if(screenStream){screenStream.getTracks().forEach(t=>t.stop());screenStream=null;}
   if(localStream){localStream.getTracks().forEach(t=>t.stop());localStream=null;}
+  isScreenSharing=false;
   $('remoteVideo').srcObject=null;
   $('localVideo').srcObject=null;
   $('callScreen').classList.add('hidden');
@@ -1915,6 +2037,48 @@ function toggleCallCam(){
   $('callCamBtn').classList.toggle('cam-off',isVideoOff);
   setCamIcon(isVideoOff);
   showToast(isVideoOff?'Camera off':'Camera on');
+}
+
+const SCREEN_SHARE_ON_SVG='<svg viewBox="0 0 24 24" class="icon" style="width:22px;height:22px"><path d="M1 1l22 22"/><rect x="2" y="4" width="20" height="14" rx="2"/><path d="M8 21h8M12 18v3"/></svg>';
+const SCREEN_SHARE_OFF_SVG='<svg viewBox="0 0 24 24" class="icon" style="width:22px;height:22px"><rect x="2" y="4" width="20" height="14" rx="2"/><path d="M8 21h8M12 18v3"/></svg>';
+function setScreenShareIcon(on){$('callScreenShareIcon').innerHTML=on?SCREEN_SHARE_ON_SVG:SCREEN_SHARE_OFF_SVG;$('callScreenShareLabel').textContent=on?'Stop Share':'Share';}
+
+function getCallVideoSender(){
+  const pc=activeCall?.peerConnection;
+  if(!pc)return null;
+  return pc.getSenders().find(s=>s.track&&s.track.kind==='video')||pc.getSenders().find(s=>!s.track);
+}
+
+async function toggleScreenShare(){
+  if(!activeCall||callType!=='video')return;
+  if(isScreenSharing){stopScreenShare('Screen sharing stopped');return;}
+  let stream;
+  try{
+    stream=await navigator.mediaDevices.getDisplayMedia({video:true,audio:false});
+  }catch{showToast('Screen share was cancelled','info');return;}
+  screenStream=stream;
+  const screenTrack=stream.getVideoTracks()[0];
+  const sender=getCallVideoSender();
+  if(sender)await sender.replaceTrack(screenTrack).catch(()=>{});
+  $('localVideo').srcObject=stream;
+  isScreenSharing=true;
+  $('callScreenShareBtn').classList.add('cam-off');
+  setScreenShareIcon(true);
+  showToast('Sharing your screen','success');
+  // Auto-revert if the user stops sharing from the browser's own "Stop sharing" control.
+  screenTrack.addEventListener('ended',()=>{if(isScreenSharing)stopScreenShare('Screen sharing stopped');});
+}
+
+async function stopScreenShare(reason){
+  if(screenStream){screenStream.getTracks().forEach(t=>t.stop());screenStream=null;}
+  isScreenSharing=false;
+  $('callScreenShareBtn').classList.remove('cam-off');
+  setScreenShareIcon(false);
+  const camTrack=localStream?.getVideoTracks()[0];
+  const sender=getCallVideoSender();
+  if(sender&&camTrack)await sender.replaceTrack(camTrack).catch(()=>{});
+  $('localVideo').srcObject=localStream;
+  if(reason)showToast(reason);
 }
 
 /* ---- Call Ringtone ---- */
@@ -2211,6 +2375,7 @@ function wireEvents(){
   $('callEndBtn').addEventListener('click',endCall);
   $('callCamBtn').addEventListener('click',toggleCallCam);
   $('callSpeakerBtn').addEventListener('click',()=>showToast('Speaker toggle requires native app','info'));
+  $('callScreenShareBtn').addEventListener('click',toggleScreenShare);
 
   // Incoming call
   $('acceptCallBtn').addEventListener('click',acceptCall);
@@ -2322,6 +2487,7 @@ function wireEvents(){
   // Invite tabs
   $('codeTabBtn').addEventListener('click',()=>{$('codeTabBtn').classList.add('active');$('scanTabBtn').classList.remove('active');$('codeTabPanel').classList.remove('hidden');$('scanTabPanel').classList.add('hidden');});
   $('scanTabBtn').addEventListener('click',()=>{$('scanTabBtn').classList.add('active');$('codeTabBtn').classList.remove('active');$('scanTabPanel').classList.remove('hidden');$('codeTabPanel').classList.add('hidden');startCamera();});
+  $('flashToggle').addEventListener('click',toggleTorch);
   $('copyTokenBtn').addEventListener('click',()=>navigator.clipboard.writeText(myToken).then(()=>showToast('Token copied!')));
   $('linkActionBtn').addEventListener('click',()=>{const url=buildInviteURL();navigator.clipboard.writeText(url).then(()=>showToast('Link copied!'));});
   $('shareActionBtn').addEventListener('click',()=>{const url=buildInviteURL();if(navigator.share)navigator.share({title:'Chatla',url}).catch(()=>{});else navigator.clipboard.writeText(url).then(()=>showToast('Link copied!'));});
@@ -2338,7 +2504,7 @@ function wireEvents(){
     showToast('Checking…','info');
     const exists=await checkPeerExists(t);
     if(!exists){showToast('User not available','warn');return;}
-    await addContact(t,null,null);
+    await addContact(t,null,null,{status:'pending_sent'});
   });
 
   // Call history
@@ -2389,41 +2555,68 @@ function openModal(id){$(id).classList.remove('hidden');}
 function closeModal(id){$(id).classList.add('hidden');if(id==='inviteModal')stopCamera();}
 
 /* ============================================================ QR CAMERA */
-let cameraStream=null,scanInterval=null;
+let cameraStream=null,scanInterval=null,scanCanvas=null,scanCtx=null,torchOn=false,scanBusy=false;
+function handleScannedToken(rawData){
+  let token;
+  try{const url=new URL(rawData);token=url.searchParams.get('add')||rawData.trim();}
+  catch{token=rawData.trim();}
+  if(!token){return;}
+  if(!validateToken(token)){showToast('Invalid QR code','warn');return;}
+  stopCamera();closeModal('inviteModal');
+  if(token===myToken){showToast("That's your own token!",'warn');return;}
+  if(contacts.find(c=>c.token===token)){showToast('Contact already added','info');openChat(token);setMobileNav('chat');return;}
+  showToast('Checking…','info');
+  checkPeerExists(token).then(exists=>{
+    if(!exists)showToast('User not available right now','warn');
+    else addContact(token,null,null,{status:'pending_sent'});
+  });
+}
 function startCamera(){
   if(cameraStream)return;
-  navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}})
-    .then(stream=>{
-      cameraStream=stream;const video=$('scanVideo');video.srcObject=stream;video.play();
-      scanInterval=setInterval(()=>{
-        if(video.readyState<2)return;
-        const canvas=document.createElement('canvas');canvas.width=video.videoWidth;canvas.height=video.videoHeight;
-        canvas.getContext('2d').drawImage(video,0,0);
-        const img=canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height);
-        if(typeof jsQR!=='undefined'){
-          const code=jsQR(img.data,img.width,img.height);
-          if(code?.data){stopCamera();closeModal('inviteModal');
-            let token;
-            try{const url=new URL(code.data);token=url.searchParams.get('add')||code.data.trim();}
-            catch{token=code.data.trim();}
-            if(token&&validateToken(token)){
-              if(token===myToken){showToast("That's your own token!",'warn');}
-              else if(contacts.find(c=>c.token===token)){showToast('Contact already added','info');openChat(token);}
-              else{
-                showToast('Checking…','info');
-                checkPeerExists(token).then(exists=>{
-                  if(!exists)showToast('User not available','warn');
-                  else addContact(token,null,null);
-                });
-              }
-            } else if(token){showToast('Invalid QR code','warn');}
+  const video=$('scanVideo');
+  const constraintsList=[{video:{facingMode:{ideal:'environment'}}},{video:true}];
+  const tryNext=i=>{
+    if(i>=constraintsList.length){showToast('Camera not available. Check camera permission.','warn');return;}
+    navigator.mediaDevices.getUserMedia(constraintsList[i])
+      .then(stream=>{
+        cameraStream=stream;video.srcObject=stream;
+        video.play().catch(()=>{});
+        torchOn=false;$('flashToggle')?.classList.remove('on');
+        if(!scanCanvas){scanCanvas=document.createElement('canvas');scanCtx=scanCanvas.getContext('2d',{willReadFrequently:true});}
+        clearInterval(scanInterval);
+        scanInterval=setInterval(()=>{
+          if(scanBusy||video.readyState<2||!video.videoWidth)return;
+          scanBusy=true;
+          scanCanvas.width=video.videoWidth;scanCanvas.height=video.videoHeight;
+          scanCtx.drawImage(video,0,0,scanCanvas.width,scanCanvas.height);
+          const img=scanCtx.getImageData(0,0,scanCanvas.width,scanCanvas.height);
+          scanBusy=false;
+          if(typeof jsQR!=='undefined'){
+            const code=jsQR(img.data,img.width,img.height,{inversionAttempts:'dontInvert'});
+            if(code?.data)handleScannedToken(code.data);
           }
-        }
-      },400);
-    })
-    .catch(()=>showToast('Camera not available','warn'));
+        },250);
+      })
+      .catch(()=>tryNext(i+1));
+  };
+  tryNext(0);
 }
-function stopCamera(){clearInterval(scanInterval);scanInterval=null;cameraStream?.getTracks().forEach(t=>t.stop());cameraStream=null;const video=$('scanVideo');if(video)video.srcObject=null;}
+function toggleTorch(){
+  if(!cameraStream)return;
+  const track=cameraStream.getVideoTracks()[0];
+  const caps=track?.getCapabilities?.();
+  if(!caps||!caps.torch){showToast('Flashlight not supported on this device','info');return;}
+  torchOn=!torchOn;
+  track.applyConstraints({advanced:[{torch:torchOn}]}).then(()=>{
+    $('flashToggle')?.classList.toggle('on',torchOn);
+  }).catch(()=>showToast('Could not toggle flashlight','warn'));
+}
+function stopCamera(){
+  clearInterval(scanInterval);scanInterval=null;
+  cameraStream?.getTracks().forEach(t=>t.stop());cameraStream=null;
+  torchOn=false;$('flashToggle')?.classList.remove('on');
+  const video=$('scanVideo');if(video)video.srcObject=null;
+}
 
 /* ---- Fast reconnect on tab refocus / network back ----
    Mobile browsers often suspend WebRTC/JS timers while backgrounded, which silently kills
